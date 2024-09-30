@@ -18,22 +18,20 @@ def log_as_dictionary(log):
         case_dictionary.setdefault(case_id,[]).append(event_log)
     return case_dictionary
 def dependency_graph_inline(log):
-    dg ={}
+    dg = {}
     for case_id, events in log.items():
-        tasks = [event['task'] for event in events]
+        # Extract tasks, handling both inline logs ('task') and XES logs ('concept:name')
+        tasks = [event.get('task', event.get('concept:name')) for event in events]
         for i in range(len(tasks) - 1):
             source = tasks[i]
             target = tasks[i + 1]
             if source not in dg:
                 dg[source] = {}
-
             if target not in dg[source]:
                 dg[source][target] = 0
-
             dg[source][target] += 1
     return dg
-import xml.etree.ElementTree as ET
-from datetime import datetime
+
 
 def read_from_file(filename):
     log_dict = {}
@@ -121,6 +119,7 @@ if __name__ == "__main__":
         for aj in sorted(dg[ai].keys()):
             print(ai, '->', aj, ':', dg[ai][aj])
     log = read_from_file("extension-log.xes")
+    print(log)
     for case_id in sorted(log):
         print((case_id, len(log[case_id])))
     case_id = "case_123"
