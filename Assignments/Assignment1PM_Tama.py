@@ -17,9 +17,9 @@ class PetriNet:
         return self
 
     def add_edge(self, source, target):
-        if source > 0 and target < 0:
+        if source > 0 > target:
             self.transitions[target]['inputs'].add(source)
-        elif source < 0 and target > 0:
+        elif source < 0 < target:
             self.transitions[source]['outputs'].add(target)
         return self
 

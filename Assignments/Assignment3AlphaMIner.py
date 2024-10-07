@@ -1,5 +1,8 @@
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from pprint import pprint
+
+
 class PetriNet:
     def __init__(self):
         self.places = {}
@@ -9,17 +12,17 @@ class PetriNet:
         self.places[name] = 0
         return self
 
-    def add_transition(self, name, id):
-        self.transitions[id] = {
+    def add_transition(self, name, t_id):
+        self.transitions[t_id] = {
             'name': name,
             'inputs': set(),
             'outputs': set()
         }
         return self
     def add_edge(self, source, target):
-        if source > 0 and target < 0:
+        if source > 0 > target:
             self.transitions[target]['inputs'].add(source)
-        elif source < 0 and target > 0:
+        elif source < 0 < target:
             self.transitions[source]['outputs'].add(target)
         return self
     def get_tokens(self, place):
@@ -115,6 +118,10 @@ def alpha(log_dict):
             if target not in follows[source]:
                 follows[source][target] = 0
             follows[source][target] += 1
+
+    print("Follow:")
+    pprint(follows)
+    print("Transitions U:",transitions_unique)
     p = PetriNet()
     p.add_place(1)
     p.add_marking(1)
@@ -122,6 +129,7 @@ def alpha(log_dict):
     for i, transition in enumerate(transitions_unique, start=1):
         t_id = i * -1
         transition_with_id[transition] = t_id
+        print("Transition:T_id=>",transition,t_id)
         p.add_transition(transition,t_id)
     p_id=2
     for source, inter_items in follows.items():
@@ -146,6 +154,14 @@ def alpha(log_dict):
             p.add_place(p_id)
             p.add_edge(id,p_id)
             p_id+= 1
+    print("Places",p.places)
+    print("Transitions:",)
+    for t_id, transition in p.transitions.items():
+        print(f"Transition ID: {t_id}")
+        print(f"Name: {transition['name']}")
+        print(f"Inputs: {transition['inputs']}")
+        print(f"Outputs: {transition['outputs']}")
+        print("-" * 30)  # Separator for be
     return p
 
 def check_enabled(pn):
@@ -155,7 +171,7 @@ def check_enabled(pn):
   print("")
 
 if __name__ == "__main__":
-    mined_model = alpha(read_from_file("extension-log.xes"))
+    mined_model = alpha(read_from_file("loan-process.xes"))
     trace = ["record issue", "inspection", "intervention authorization", "work mandate", "work completion",
              "issue completion"]
     for a in trace:
