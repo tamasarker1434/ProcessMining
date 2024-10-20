@@ -1,8 +1,6 @@
 from datetime import datetime
 import xml.etree.ElementTree as ET
 from pprint import pprint
-
-
 class PetriNet:
     def __init__(self):
         self.places = {}
@@ -109,9 +107,9 @@ def check_enabled(pn):
   for t in ts:
     print (pn.is_enabled(pn.transition_name_to_id(t)))
   print("")
-
+follows = {}
 def get_direct_succession(log_dict):
-    follows = {}
+
     for case_id, events in log_dict.items():
         tasks = [event['concept:name'] for event in events]
         for i in range(len(tasks) - 1):
@@ -125,7 +123,8 @@ def get_direct_succession(log_dict):
                 follows[source][target] = 0
             follows[source][target] += 1
     pairs = []
-
+    print("follow:")
+    pprint(follows)
     # Iterate over the dictionary
     for outer_key, inner_dict in follows.items():
         for inner_key in inner_dict.keys():
@@ -158,9 +157,11 @@ def get_choice(d_succession):
 def get_x_w(d_succession,causality,choice):
     x_w = []
     for pair in d_succession:
-        a,b = pair
-        if (a,b) in causality and (a,a) in choice and (b,b) in choice:
-            x_w.append((a,b))
+        x,y = pair
+        if (x,y) in causality and (x,x) in choice and (y,y) in choice:
+            x_w.append(pair)
+    # print("x_w:")
+    # pprint(x_w)
     return x_w
 def get_p_w(x_w):
     place_ids = {}
@@ -181,7 +182,7 @@ transitions_unique = set()
 p = PetriNet()
 
 
-def set_petrinet_flow(x_w, p_w):
+def set_petrinet_flow(x_w,p_w):
     temp_t= 0
     transition_with_id = {}
     for i in transitions_unique:
@@ -257,18 +258,82 @@ def marge_petrinet():
                         if x in transition_output:
                             outputs.remove(x)  # Remove the old value
                             outputs.add(min_output)  # Add the minimum output
+
+transition_with_place_id ={}
+def create_petrinet(x_w):
+    temp_t = 0
+    place_id = 2
+    transition_with_id = {}
+    for i in transitions_unique:
+        temp_t += 1
+        t_id = temp_t * -1
+        p.add_transition(i, t_id)
+        transition_with_id[i] = t_id
+    for outer_key, inner_dict in follows.items():
+        # inner_key_count = sum(map(len, inner_dict.values()))
+        inner_key_count = sum(len(v) for v in inner_dict.values() if isinstance(v, dict))
+        if inner_key_count == 1:
+            inner_key, inner_value = next(iter(inner_dict.items()))
+            p.add_place(place_id)
+            p.add_edge(transition_with_id[outer_key],place_id)
+            p.add_edge(place_id,transition_with_id[inner_key])
+            place_id += 1
+        else:
+            and_join = False
+            join_value=0
+            for inner_key, inner_value in inner_dict.items():
+                if join_value == 0:
+                    join_value = inner_value
+                else:
+                    if join_value == inner_value:
+                        and_join = True
+            if and_join:
+                for inner_key, inner_value in inner_dict.items():
+                    p.add_place(place_id)
+                    p.add_edge(transition_with_id[outer_key], place_id)
+                    p.add_edge(place_id, transition_with_id[inner_key])
+                    place_id += 1
+            else:
+                p_place = place_id
+                place_id += 1
+                p.add_place(p_place)
+                p.add_edge(transition_with_id[outer_key], p_place)
+                for inner_key, inner_value in inner_dict.items():
+                    p.add_edge(p_place, transition_with_id[inner_key])
+    for t_id, transition in p.transitions.items():
+        print(f"Transition ID: {t_id}")
+        print(f"  Name: {transition['name']}")
+        print(f"  Inputs: {transition['inputs']}")
+        print(f"  Outputs: {transition['outputs']}")
+        print("--"*30)  # Blank line for better readability
+    for id, details in p.transitions.items():
+        if not details['inputs'] and details['outputs']:
+            p.add_place(1)
+            p.add_edge(1,id)
+            p.add_marking(1)
+        if details['inputs'] and not details['outputs']:
+            p.add_place(place_id)
+            p.add_edge(id,place_id)
+            place_id+= 1
+    for t_id, transition in p.transitions.items():
+        print(f"Transition ID: {t_id}")
+        print(f"  Name: {transition['name']}")
+        print(f"  Inputs: {transition['inputs']}")
+        print(f"  Outputs: {transition['outputs']}")
+        print("--"*30)  # Blank line for better readability
+
 def alpha(log_dict):
     d_succession = get_direct_succession(log_dict)
     t_w = transitions_unique
     causality, parallel = get_causality_parallel(d_succession)
     choice = get_choice(d_succession)
     x_w = get_x_w(d_succession,causality,choice)
-    p_w = get_p_w(x_w)
-    set_petrinet_flow(x_w,p_w)
-    # marge_petrinet()
+    #p_w = get_p_w(x_w)
+    create_petrinet(x_w)
     return p
 if __name__ == "__main__":
     mined_model = alpha(read_from_file("extension-log.xes"))
+    # mined_model = alpha(read_from_file("loan-process.xes"))
     trace = ["record issue", "inspection", "intervention authorization", "work mandate", "work completion",
              "issue completion"]
     for a in trace:

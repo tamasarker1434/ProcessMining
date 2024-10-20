@@ -1,6 +1,8 @@
-import xml.etree.ElementTree as ET
 from datetime import datetime
+import xml.etree.ElementTree as ET
 from pprint import pprint
+
+from pandas import notnull
 
 
 class PetriNet:
@@ -12,17 +14,17 @@ class PetriNet:
         self.places[name] = 0
         return self
 
-    def add_transition(self, name, id):
-        self.transitions[id] = {
+    def add_transition(self, name, t_id):
+        self.transitions[t_id] = {
             'name': name,
             'inputs': set(),
             'outputs': set()
         }
         return self
     def add_edge(self, source, target):
-        if source > 0 and target < 0:
+        if source > 0 > target:
             self.transitions[target]['inputs'].add(source)
-        elif source < 0 and target > 0:
+        elif source < 0 < target:
             self.transitions[source]['outputs'].add(target)
         return self
     def get_tokens(self, place):
@@ -103,9 +105,15 @@ def read_from_file(filename):
             events.append(event_data)
         log_dict[case_id] = events
     return log_dict
-def alpha(log_dict):
-    follows = {}
-    transitions_unique = set()
+
+def check_enabled(pn):
+  ts = ["record issue", "inspection", "intervention authorization", "action not required", "work mandate", "no concession", "work completion", "issue completion"]
+  for t in ts:
+    print (pn.is_enabled(pn.transition_name_to_id(t)))
+  print("")
+follows = {}
+def get_direct_succession(log_dict):
+
     for case_id, events in log_dict.items():
         tasks = [event['concept:name'] for event in events]
         for i in range(len(tasks) - 1):
@@ -118,49 +126,130 @@ def alpha(log_dict):
             if target not in follows[source]:
                 follows[source][target] = 0
             follows[source][target] += 1
-    print("Follow:")
+    pairs = []
+    print("follow:")
     pprint(follows)
-    p = PetriNet()
-    p.add_place(1)
-    p.add_marking(1)
+    # Iterate over the dictionary
+    for outer_key, inner_dict in follows.items():
+        for inner_key in inner_dict.keys():
+            # Append the tuple (outer_key, inner_key) to the list
+            pairs.append((outer_key, inner_key))
+    return pairs
+def get_causality_parallel(d_succession):
+    causality = set()
+    parallel = set()
+    for i in d_succession:
+        a,b= i
+        if (a,b) and (b,a) in d_succession:
+            parallel.add((a,b))
+            parallel.add((b,a))
+        else:
+            causality.add((a, b))
+    return causality, parallel
+
+def get_choice(d_succession):
+    choice = []
+    all_element= []
+    for i in transitions_unique:
+        for j in transitions_unique:
+            all_element.append((i,j))
+    for i in all_element:
+        a,b = i
+        if (a,b) not in d_succession and (b,a) not in d_succession:
+            choice.append(i)
+    return choice
+
+
+def get_x_w(d_succession,causality,choice):
+    x_w = []
+    for a in transitions_unique:
+        for b in transitions_unique:
+            if a != b:
+                set_a = []
+                set_b = []
+
+                # Condition check for causality and choice
+                if (a, b) in causality and (a, a) in choice and (b, b) in choice:
+                    # If the sets are empty, append 'a' and 'b' to set_a and set_b respectively
+                    set_a.append(a)
+                    set_b.append(b)
+
+                # Append (set_a, set_b) to x_w
+                if set_a and set_b:
+                    x_w.append((set_a, set_b))
+
+                    # Print final result of x_w
+                    print("xw:")
+                    pprint(x_w)
+                    print("-"*30)
+
+    return x_w
+
+def get_y_w(X_W):
+    """Compute the Y_W relation based on the causal relations X_W."""
+    Y_W = set()
+
+    # Find pairs (a, b) that share common inputs or outputs
+    for (a1, b1) in X_W:
+        for (a2, b2) in X_W:
+            # Check if a1 and a2 share a common output (b1 == b2)
+            if b1 == b2 and a1 != a2:
+                Y_W.add((a1, a2))
+            # Check if b1 and b2 share a common input (a1 == a2)
+            if a1 == a2 and b1 != b2:
+                Y_W.add((b1, b2))
+
+    return Y_W
+
+
+# def get_p_w(y_w):
+#     for i in y_w:
+#         p.add_place(p_id)
+#         p_id += 1
+
+
+
+transitions_unique = set()
+p = PetriNet()
+
+
+def set_petrinet_flow(x_w,p_w):
+    temp_t= 0
     transition_with_id = {}
-    for i, transition in enumerate(transitions_unique, start=1):
-        t_id = i * -1
-        transition_with_id[transition] = t_id
-        p.add_transition(transition,t_id)
-    p_id=2
-    for source, inter_items in follows.items():
-        place = -1
-        for target, _ in inter_items.items():
-            if p.transitions[transition_with_id[target]]['inputs']:
-                for i in p.transitions[transition_with_id[target]]['inputs']:
-                    place = i
-                    continue
-            if place <0 :
-                place = p_id
-                p.add_place(place)
-                p_id += 1
-                continue
-        for target, _ in inter_items.items():
-            p.add_edge(place, transition_with_id[target])
-        p.add_edge(transition_with_id[source], place)
+    for i in transitions_unique:
+        temp_t += 1
+        t_id = temp_t * -1
+        p.add_transition(i,t_id)
+        transition_with_id[i] = t_id
+    for pair in x_w:
+        a,b = pair
+        p_id = p_w[pair]
+        p.add_edge(transition_with_id[a],p_id)
+        p.add_edge(p_id,transition_with_id[b])
     for id, details in p.transitions.items():
         if not details['inputs'] and details['outputs']:
-            p.add_edge(1,id)
+            p.add_edge(p_w["i_w"],id)
         if details['inputs'] and not details['outputs']:
-            p.add_place(p_id)
-            p.add_edge(id,p_id)
-            p_id+= 1
+            p.add_edge(id,p_w["o_w"])
+
+
+def alpha(log_dict):
+    d_succession = get_direct_succession(log_dict)
+    print("d_succession:")
+    pprint(d_succession)
+    t_w = transitions_unique
+    causality, parallel = get_causality_parallel(d_succession)
+    choice = get_choice(d_succession)
+    x_w = get_x_w(d_succession,causality,choice)
+    # print("xw:")
+    # pprint(x_w)
+    # y_w = get_y_w(x_w)
+    # print("yw:")
+    # # p_w = get_p_w(y_w)
     return p
-
-def check_enabled(pn):
-  ts = ["record issue", "inspection", "intervention authorization", "action not required", "work mandate", "no concession", "work completion", "issue completion"]
-  for t in ts:
-    print (pn.is_enabled(pn.transition_name_to_id(t)))
-  print("")
-
 if __name__ == "__main__":
-    mined_model = alpha(read_from_file("extension-log-noisy-4.xes"))
+    mined_model = alpha(read_from_file("extension-log.xes"))
+    # mined_model = alpha(read_from_file("loan-process.xes"))
     # trace = ["record issue", "inspection", "intervention authorization", "work mandate", "work completion",
     #          "issue completion"]
     # for a in trace:
