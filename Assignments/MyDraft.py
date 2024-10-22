@@ -3,6 +3,9 @@ from datetime import datetime
 from pprint import pprint
 import copy
 
+from AplhaMiningAlgorithm import transition_with_place_id
+
+
 class PetriNet:
     def __init__(self):
         self.places = {}
@@ -120,9 +123,9 @@ def read_from_file(filename):
             events.append(event_data)
         log_dict[case_id] = events
     return log_dict
+transitions_unique = set()
 def alpha(log_dict):
     follows = {}
-    transitions_unique = set()
     for case_id, events in log_dict.items():
         tasks = [event['concept:name'] for event in events]
         for i in range(len(tasks) - 1):
@@ -135,38 +138,37 @@ def alpha(log_dict):
             if target not in follows[source]:
                 follows[source][target] = 0
             follows[source][target] += 1
-    p = PetriNet()
-    p.add_place(1)
-    p.add_marking(1)
+    pn.add_place(1)
+    pn.add_marking(1)
     transition_with_id = {}
     for i, transition in enumerate(transitions_unique, start=1):
         t_id = i * -1
         transition_with_id[transition] = t_id
-        p.add_transition(transition,t_id)
+        pn.add_transition(transition,t_id)
     p_id=2
     for source, inter_items in follows.items():
         place = -1
         for target, _ in inter_items.items():
-            if p.transitions[transition_with_id[target]]['inputs']:
-                for i in p.transitions[transition_with_id[target]]['inputs']:
+            if pn.transitions[transition_with_id[target]]['inputs']:
+                for i in pn.transitions[transition_with_id[target]]['inputs']:
                     place = i
                     continue
             if place <0 :
                 place = p_id
-                p.add_place(place)
+                pn.add_place(place)
                 p_id += 1
                 continue
         for target, _ in inter_items.items():
-            p.add_edge(place, transition_with_id[target])
-        p.add_edge(transition_with_id[source], place)
-    for id, details in p.transitions.items():
+            pn.add_edge(place, transition_with_id[target])
+        pn.add_edge(transition_with_id[source], place)
+    for id, details in pn.transitions.items():
         if not details['inputs'] and details['outputs']:
-            p.add_edge(1,id)
+            pn.add_edge(1,id)
         if details['inputs'] and not details['outputs']:
-            p.add_place(p_id)
-            p.add_edge(id,p_id)
+            pn.add_place(p_id)
+            pn.add_edge(id,p_id)
             p_id+= 1
-    return p
+    return pn
 def get_value_k(log):
     traces = set()
     trac_with_n = {}
@@ -190,7 +192,6 @@ def get_value_k(log):
 pn = PetriNet()
 def fitness_token_replay(log, mined_model):
     last_events = log[next(iter(log))][-1]['concept:name']
-    print(last_events)
     n =[]
     m =[]
     c =[]
@@ -198,36 +199,27 @@ def fitness_token_replay(log, mined_model):
     p =[]
     trac_with_n, traces = get_value_k(log)
     for trace in traces:
-        print(trace)
-        last_a =""
         pn.n = trac_with_n[trace]
         pn.reset_para()
         m_places = copy.deepcopy(pn.places)
-        # trace = ('record issue', 'work mandate', 'work mandate', 'inspection', 'intervention authorization', 'work completion', 'issue completion')
         for a in trace:
-            last_a = a
-            mined_model.fire_transition(mined_model.transition_name_to_id(a))
-            if last_a == last_events:
-                t_id = mined_model.transition_name_to_id(last_a)
-                for target in pn.edges.keys():
-                    if target == t_id:
-                        x = pn.edges[target]
-                        if isinstance(x, list):
-                            x = x[0]
-                        pn.places[x] -= 1
-                        pn.c += 1
-
-            else:
+            if a in transitions_unique:
+                mined_model.fire_transition(mined_model.transition_name_to_id(a))
+        last_events_id = mined_model.transition_name_to_id(last_events)
+        for place in pn.transitions[last_events_id]['outputs']:
+            if pn.places[place] == 0:
+                pn.places[place] += 1
                 pn.m += 1
-                pn.c += 1
-            for i in pn.places.keys():
-                pn.r += pn.places[i]
+        for place in pn.transitions[last_events_id]['outputs']:
+            pn.places[place] -= 1
+            pn.c += 1
+        for i in pn.places.keys():
+            pn.r += pn.places[i]
         n.append(pn.n)
         m.append(pn.m)
         c.append(pn.c)
         r.append(pn.r)
         p.append(pn.p)
-        print(f"m = {pn.m}; c = {pn.c}; r = {pn.r}; p = {pn.p}")
         pn.places = copy.deepcopy(m_places)
     conformance = calculate_f(n,m,c,r,p)
     return conformance
@@ -251,5 +243,4 @@ if __name__ == "__main__":
     log_noisy = read_from_file("extension-log-noisy-4.xes")
     mined_model = alpha(log)
     print(round(fitness_token_replay(log, mined_model), 5))
-    print("="*40)
     print(round(fitness_token_replay(log_noisy, mined_model), 5))
