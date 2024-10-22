@@ -11,12 +11,6 @@ class PetriNet():
         self.edges = {}
         self.m = self.c = self.r = 0.0
         self.p = 1.0
-    def reset(self):
-        self.places = {}
-        self.transitions = {}
-        self.edges = {}
-        self.m = self.c = self.r = 0.0
-        self.p = 1.0
     def reset_para(self):
         self.m = self.c = self.r = 0.0
         self.p = 1.0
@@ -43,31 +37,23 @@ class PetriNet():
 
         return True
     def fire_transition(self, transition):
-
         if transition not in self.transitions.values() or not self.is_enabled(transition):
             for source in self.edges:
                 if source == transition:
                     for target in self.edges[source]:
                         self.places[target] += 1
-                        self.p += 1
+                        self.m += 1
+                        enabled.append(transition)
+        for source in self.edges:
+            if source == transition:
+                for target in self.edges[source]:
+                    self.places[target] += 1
+                    self.p += 1
+            else:
+                for target in self.edges[source]:
+                    if target == transition:
+                        self.places[source] -= 1
                         self.c += 1
-
-                else:
-                    for target in self.edges[source]:
-                        if target == transition:
-                            self.m += 1
-        else:
-            for source in self.edges:
-                if source == transition:
-                    for target in self.edges[source]:
-                        self.places[target] += 1
-                        self.p += 1
-
-                else:
-                    for target in self.edges[source]:
-                        if target == transition:
-                            self.places[source] -= 1
-                            self.c += 1
     def add_marking(self, place):
         self.places[place] += 1
 
@@ -257,30 +243,49 @@ def get_value_k(log):
                 n += 1
         trac_with_n[i] = n
     return trac_with_n,traces
-
+enabled= []
 def fitness_token_replay(log, mined_model):
+    print("Transition:",pn.transitions)
+    print("Edge:",pn.edges)
+    last_events = log[next(iter(log))][-1]['concept:name']
+    print(last_events)
     n =[]
     m =[]
     c =[]
     r =[]
     p =[]
     trac_with_n, traces = get_value_k(log)
-    k = len(traces)
     for trace in traces:
+        print(trace)
+        last_a =""
         pn.n = trac_with_n[trace]
         pn.reset_para()
         m_places = copy.deepcopy(pn.places)
+        trace = ('record issue', 'work mandate', 'work mandate', 'inspection', 'intervention authorization', 'work completion', 'issue completion')
         for a in trace:
-            mined_model.fire_transition(mined_model.transition_name_to_id(a))
-        for i in pn.places.keys():
-            pn.r += pn.places[i]
-        pn.c += 1
-        pn.r -= 1
+            if a in pn.transitions:
+                last_a = a
+                mined_model.fire_transition(mined_model.transition_name_to_id(a))
+            if last_a == last_events:
+                t_id = mined_model.transition_name_to_id(last_a)
+                for target in pn.edges.keys():
+                    if target == t_id:
+                        x = pn.edges[target]
+                        if isinstance(x, list):
+                            x = x[0]
+                        pn.places[x] -= 1
+                        pn.c += 1
+            else:
+                pn.m += 1
+                pn.c += 1
+            for i in pn.places.keys():
+                pn.r += pn.places[i]
         n.append(pn.n)
         m.append(pn.m)
         c.append(pn.c)
         r.append(pn.r)
         p.append(pn.p)
+        print(f"m = {pn.m}; c = {pn.c}; r = {pn.r}; p = {pn.p}")
         pn.places = copy.deepcopy(m_places)
     conformance = calculate_f(n,m,c,r,p)
     return conformance
@@ -304,4 +309,5 @@ if __name__ == "__main__":
     log_noisy = read_from_file("extension-log-noisy-4.xes")
     mined_model = alpha(log)
     print(round(fitness_token_replay(log, mined_model), 5))
+    print("="*40)
     print(round(fitness_token_replay(log_noisy, mined_model), 5))

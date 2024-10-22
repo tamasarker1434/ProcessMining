@@ -118,8 +118,6 @@ def alpha(log_dict):
             if target not in follows[source]:
                 follows[source][target] = 0
             follows[source][target] += 1
-    print("Follow:")
-    pprint(follows)
     p = PetriNet()
     p.add_place(1)
     p.add_marking(1)
@@ -160,9 +158,9 @@ def check_enabled(pn):
   print("")
 
 if __name__ == "__main__":
-    mined_model = alpha(read_from_file("extension-log-noisy-4.xes"))
-    # trace = ["record issue", "inspection", "intervention authorization", "work mandate", "work completion",
-    #          "issue completion"]
-    # for a in trace:
-    #     check_enabled(mined_model)
-    #     mined_model.fire_transition(mined_model.transition_name_to_id(a))
+    mined_model = alpha(read_from_file("extension-log.xes"))
+    trace = ["record issue", "inspection", "intervention authorization", "work mandate", "work completion",
+             "issue completion"]
+    for a in trace:
+        check_enabled(mined_model)
+        mined_model.fire_transition(mined_model.transition_name_to_id(a))
